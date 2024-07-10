@@ -4,9 +4,31 @@ use Livewire\Attributes\{On};
 use Livewire\Volt\Component;
 use OpenAI\Laravel\Facades\OpenAI;
 
-new class extends Component {
+new class extends Component
+{
     public $msg = '';
+
     public $conversationHistory = [];
+
+    public $conversationHistoryLength;
+
+    public function mount()
+    {
+        $this->conversationHistoryLength = config('chat.conversation_length');
+        // Load latest 10 messages from the database
+        $messages = auth()->user()->messages()->orderBy('created_at', 'desc')->take(10)->get();
+
+        // Populate conversationHistory with fetched messages
+        foreach ($messages as $message) {
+            $this->conversationHistory[] = (object) [
+                'role' => $message->sender_type == 'api' ? 'assistant' : 'user',
+                'content' => $message->content,
+            ];
+        }
+
+        // Reverse the conversationHistory to show latest messages first
+        $this->conversationHistory = array_reverse($this->conversationHistory);
+    }
 
     public function sendMsg(): void
     {
@@ -42,6 +64,11 @@ new class extends Component {
                 'content' => $result->choices[0]->message->content,
                 'sender_type' => 'api',
             ]);
+
+        $conversationLength = $this->conversationHistoryLength;
+        if (count($this->conversationHistory) > $conversationLength) {
+            $this->conversationHistory = array_slice($this->conversationHistory, -$conversationLength, $conversationLength);
+        }
     }
 
     public function with(): array
